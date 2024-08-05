@@ -1,0 +1,16 @@
+FROM ghcr.io/ublue-os/fedora-toolbox:latest
+
+COPY ./toolboxes/fedora-toolbox/packages /toolbox-packages
+
+RUN dnf -y upgrade && \
+    dnf -y install $(<toolbox-packages) && \
+    dnf clean all
+
+RUN ln -sf /usr/bin/distrobox-host-exec /usr/bin/flatpak && \
+    ln -sf /usr/bin/distrobox-host-exec /usr/bin/tailscale && \
+    ln -sf /usr/bin/distrobox-host-exec /usr/bin/podman && \
+    ln -sf /usr/bin/distrobox-host-exec /usr/bin/rpm-ostree && \
+    ln -sf /usr/bin/distrobox-host-exec /usr/bin/distrobox && \
+    ln -sf /usr/bin/distrobox-host-exec /usr/bin/code
+
+RUN rm /toolbox-packages

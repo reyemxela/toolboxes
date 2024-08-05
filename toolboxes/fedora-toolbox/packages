@@ -1,0 +1,16 @@
+bat
+bind-utils
+btop
+dua-cli
+entr
+eza
+jq
+netcat
+nmap
+picocom
+python3-ipython
+socat
+strace
+tmux
+vim
+zsh
