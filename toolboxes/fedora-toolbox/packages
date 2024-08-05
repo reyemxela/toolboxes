@@ -7,6 +7,7 @@ eza
 jq
 netcat
 nmap
+nvtop
 picocom
 python3-ipython
 socat
