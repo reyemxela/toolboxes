@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: '0 23 * * *'  # 11pm UTC (6/7pm EDT) everyday
   pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build-fedora-toolbox.yml'
+      - 'toolboxes/fedora-toolbox/**'
   merge_group:
   workflow_dispatch:
 env:
