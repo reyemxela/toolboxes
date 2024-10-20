@@ -60,7 +60,7 @@ jobs:
           attempt_delay: 15000
           command: |
             # pull the base image so we can retry on failure
-            sudo podman pull ghcr.io/ublue-os/${{ matrix.image_name }}:${{ matrix.image_tag }}
+            podman pull ghcr.io/ublue-os/${{ matrix.image_name }}:${{ matrix.image_tag }}
 
       # Build image using Buildah action
       - name: Build Image
