@@ -1,4 +1,4 @@
-name: Build and Push Fedora Toolbox Image
+name: Build and Push Images
 on:
   schedule:
     - cron: '0 23 * * *'  # 11pm UTC (6/7pm EDT) everyday
@@ -6,14 +6,11 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '.github/workflows/build-fedora-toolbox.yml'
-      - 'toolboxes/fedora-toolbox/**'
+    paths-ignore:
+      - '**/README.md'
   merge_group:
   workflow_dispatch:
 env:
-    IMAGE_NAME: fedora-toolbox
-    IMAGE_TAGS: latest
     IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 concurrency:
@@ -24,12 +21,16 @@ jobs:
   push-ghcr:
     name: Build and push image
     runs-on: ubuntu-22.04
+
     permissions:
       contents: read
       packages: write
       id-token: write
     strategy:
       fail-fast: false
+      matrix:
+        image_name: [fedora-toolbox]
+        image_tag: [latest]
     steps:
       # Checkout push-to-registry action GitHub repository
       - name: Checkout Push to Registry action
@@ -39,7 +40,7 @@ jobs:
         uses: EyeCantCU/cosign-action/verify@v0.2.2
         with:
           registry: ghcr.io/ublue-os
-          containers: fedora-toolbox:latest
+          containers: ${{ matrix.image_name }}:${{ matrix.image_tag }}
           pubkey: https://raw.githubusercontent.com/ublue-os/toolboxes/main/cosign.pub
 
       # Build metadata
@@ -48,9 +49,18 @@ jobs:
         id: meta
         with:
           images: |
-            ${{ env.IMAGE_NAME }}
+            ${{ matrix.image_name }}
           labels: |
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/reyemxela/toolboxes/main/README.md
+
+      - name: Pull upstream image
+        uses: Wandalen/wretry.action@v3.5.0
+        with:
+          attempt_limit: 3
+          attempt_delay: 15000
+          command: |
+            # pull the base image so we can retry on failure
+            sudo podman pull ghcr.io/ublue-os/${{ matrix.image_name }}:${{ matrix.image_tag }}
 
       # Build image using Buildah action
       - name: Build Image
@@ -58,9 +68,9 @@ jobs:
         uses: redhat-actions/buildah-build@v2
         with:
           containerfiles: |
-            ./toolboxes/fedora-toolbox/Containerfile
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ env.IMAGE_TAGS }}
+            ./toolboxes/${{ matrix.image_name }}/Containerfile
+          image: ${{ matrix.image_name }}
+          tags: ${{ matrix.image_tag }}
           labels: ${{ steps.meta.outputs.labels }}
           oci: false
 
@@ -72,45 +82,36 @@ jobs:
         with:
           string: ${{ env.IMAGE_REGISTRY }}
 
-      # Push the image to GHCR (Image Registry)
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        if: github.event_name != 'pull_request'
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
       - name: Push To GHCR
-        uses: redhat-actions/push-to-registry@v2
-        if: github.event_name != 'pull_request'
+        uses: Wandalen/wretry.action@v3.5.0
         id: push
+        if: github.event_name != 'pull_request'
         env:
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ github.token }}
         with:
-          image: ${{ steps.build_image.outputs.image }}
-          tags: ${{ steps.build_image.outputs.tags }}
-          registry: ${{ steps.registry_case.outputs.lowercase }}
-          username: ${{ env.REGISTRY_USER }}
-          password: ${{ env.REGISTRY_PASSWORD }}
-
-      # Sign container
-      - uses: sigstore/cosign-installer@v3.5.0
-        if: github.event_name != 'pull_request'
+          action: redhat-actions/push-to-registry@v2
+          attempt_limit: 3
+          attempt_delay: 15000
+          with: |
+            image: ${{ steps.build_image.outputs.image }}
+            tags: ${{ steps.build_image.outputs.tags }}
+            registry: ${{ steps.registry_case.outputs.lowercase }}
+            username: ${{ env.REGISTRY_USER }}
+            password: ${{ env.REGISTRY_PASSWORD }}
 
       - name: Sign container image
+        uses: EyeCantCU/cosign-action/sign@v0.3.0
         if: github.event_name != 'pull_request'
-        run: |
-          echo "${{ env.COSIGN_PRIVATE_KEY }}" > cosign.key
-          wc -c cosign.key
-          cosign sign -y --key cosign.key ${{ steps.registry_case.outputs.lowercase }}/${{ env.IMAGE_NAME }}@${TAGS}
-        env:
-          TAGS: ${{ steps.push.outputs.digest }}
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+        with:
+          registry: ${{ env.IMAGE_REGISTRY }}
+          containers: ${{ steps.build_image.outputs.image }}
+          registry-token: ${{ github.token }}
+          signing-secret: ${{ secrets.SIGNING_SECRET }}
+          tags: ${{ steps.push.outputs.outputs && fromJSON(steps.push.outputs.outputs).digest }}
 
       - name: Echo outputs
+        if: github.event_name != 'pull_request'
         run: |
           echo "${{ toJSON(steps.push.outputs) }}"
 
