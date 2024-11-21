@@ -20,7 +20,7 @@ concurrency:
 jobs:
   push-ghcr:
     name: Build and push image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: read
@@ -29,19 +29,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image_name: [fedora-toolbox]
+        image_name: [fedora-toolbox, fedora-dev-toolbox]
         image_tag: [latest]
     steps:
       # Checkout push-to-registry action GitHub repository
       - name: Checkout Push to Registry action
         uses: actions/checkout@v4
 
-      - name: Verify upstream toolbox
-        uses: EyeCantCU/cosign-action/verify@v0.2.2
-        with:
-          registry: ghcr.io/ublue-os
-          containers: ${{ matrix.image_name }}:${{ matrix.image_tag }}
-          pubkey: https://raw.githubusercontent.com/ublue-os/toolboxes/main/cosign.pub
+      # - name: Verify upstream toolbox
+      #   uses: EyeCantCU/cosign-action/verify@v0.2.2
+      #   with:
+      #     registry: ghcr.io/ublue-os
+      #     containers: ${{ matrix.image_name }}:${{ matrix.image_tag }}
+      #     pubkey: https://raw.githubusercontent.com/ublue-os/toolboxes/main/cosign.pub
 
       # Build metadata
       - name: Image Metadata
@@ -53,22 +53,23 @@ jobs:
           labels: |
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/reyemxela/toolboxes/main/README.md
 
+      # Pull the base image so we can retry on failure
       - name: Pull upstream image
         uses: Wandalen/wretry.action@v3.5.0
         with:
           attempt_limit: 3
           attempt_delay: 15000
           command: |
-            # pull the base image so we can retry on failure
-            podman pull ghcr.io/ublue-os/${{ matrix.image_name }}:${{ matrix.image_tag }}
+            podman pull $(awk '/^FROM / {print $2}' ./toolboxes/${{ matrix.image_name }})
 
       # Build image using Buildah action
       - name: Build Image
         id: build_image
         uses: redhat-actions/buildah-build@v2
         with:
+          context: ./toolboxes/${{ matrix.image_name }}
           containerfiles: |
-            ./toolboxes/${{ matrix.image_name }}/Containerfile
+            ./Containerfile
           image: ${{ matrix.image_name }}
           tags: ${{ matrix.image_tag }}
           labels: ${{ steps.meta.outputs.labels }}
