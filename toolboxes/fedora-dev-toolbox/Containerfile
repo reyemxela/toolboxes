@@ -14,5 +14,3 @@ RUN ln -sf /usr/bin/distrobox-host-exec /usr/bin/flatpak && \
     ln -sf /usr/bin/distrobox-host-exec /usr/bin/distrobox
 
 RUN rm /toolbox-packages
-
-FROM ghcr.io/ublue-os/fedora-toolbox-hello:latest AS help
