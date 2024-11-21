@@ -60,7 +60,7 @@ jobs:
           attempt_limit: 3
           attempt_delay: 15000
           command: |
-            podman pull $(awk '/^FROM / {print $2}' ./toolboxes/${{ matrix.image_name }})
+            podman pull $(awk '/^FROM / {print $2}' ./toolboxes/${{ matrix.image_name }}/Containerfile)
 
       # Build image using Buildah action
       - name: Build Image
