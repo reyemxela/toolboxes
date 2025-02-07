@@ -10,6 +10,7 @@ netcat
 nmap
 nvtop
 picocom
+poetry
 python3-ipython
 socat
 strace
