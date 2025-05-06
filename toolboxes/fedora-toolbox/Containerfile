@@ -1,10 +1,12 @@
 FROM ghcr.io/ublue-os/fedora-toolbox:latest
 
-COPY packages /toolbox-packages
+COPY build-files /tmp/build-files
 
 RUN dnf -y upgrade && \
-    dnf -y install $(<toolbox-packages) && \
+    dnf -y install $(</tmp/build-files/packages) && \
     dnf clean all
+
+RUN /tmp/build-files/packages-misc.sh
 
 RUN ln -sf /usr/bin/distrobox-host-exec /usr/bin/flatpak && \
     ln -sf /usr/bin/distrobox-host-exec /usr/bin/tailscale && \
@@ -13,4 +15,4 @@ RUN ln -sf /usr/bin/distrobox-host-exec /usr/bin/flatpak && \
     ln -sf /usr/bin/distrobox-host-exec /usr/bin/distrobox && \
     ln -sf /usr/bin/distrobox-host-exec /usr/bin/code
 
-RUN rm /toolbox-packages
+RUN rm -rf /tmp/build-files
