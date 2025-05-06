@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image_name: [fedora-toolbox, fedora-dev-toolbox]
+        image_name: [fedora-toolbox]
         image_tag: [latest]
     steps:
       # Checkout push-to-registry action GitHub repository
