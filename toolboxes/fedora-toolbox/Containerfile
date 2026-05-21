@@ -1,7 +1,7 @@
 FROM ghcr.io/ublue-os/fedora-toolbox:latest
 
-COPY ../../scripts /scripts
-COPY ./packages.sh /scripts/
+COPY scripts /scripts
+COPY toolboxes/fedora-dev-toolbox/packages.sh /scripts/
 
 RUN /scripts/distrobox-shims.sh
 RUN /scripts/packages.sh
