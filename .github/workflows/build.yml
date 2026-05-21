@@ -1,8 +1,10 @@
 name: Build and Push Images
 on:
   schedule:
-    - cron: '0 23 * * *'  # 11pm UTC (6/7pm EDT) everyday
+    - cron: '0 23 * * 5'  # 11pm UTC on F riday (6/7pm EDT) 
   pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -11,7 +13,7 @@ on:
   merge_group:
   workflow_dispatch:
 env:
-    IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -29,19 +31,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image_name: [fedora-toolbox]
+        image_name: [fedora-toolbox, fedora-dev-toolbox]
         image_tag: [latest]
     steps:
       # Checkout push-to-registry action GitHub repository
-      - name: Checkout Push to Registry action
-        uses: actions/checkout@v4
-
-      # - name: Verify upstream toolbox
-      #   uses: EyeCantCU/cosign-action/verify@v0.2.2
-      #   with:
-      #     registry: ghcr.io/ublue-os
-      #     containers: ${{ matrix.image_name }}:${{ matrix.image_tag }}
-      #     pubkey: https://raw.githubusercontent.com/ublue-os/toolboxes/main/cosign.pub
+      - name: Checkout
+        uses: actions/checkout@v6
 
       # Build metadata
       - name: Image Metadata
@@ -53,27 +48,17 @@ jobs:
           labels: |
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/reyemxela/toolboxes/main/README.md
 
-      # Pull the base image so we can retry on failure
-      - name: Pull upstream image
-        uses: Wandalen/wretry.action@v3.5.0
-        with:
-          attempt_limit: 3
-          attempt_delay: 15000
-          command: |
-            podman pull $(awk '/^FROM / {print $2}' ./toolboxes/${{ matrix.image_name }}/Containerfile)
-
       # Build image using Buildah action
       - name: Build Image
         id: build_image
         uses: redhat-actions/buildah-build@v2
         with:
-          context: ./toolboxes/${{ matrix.image_name }}
           containerfiles: |
             ./toolboxes/${{ matrix.image_name }}/Containerfile
           image: ${{ matrix.image_name }}
           tags: ${{ matrix.image_tag }}
           labels: ${{ steps.meta.outputs.labels }}
-          oci: false
+          oci: true
 
       # Workaround bug where capital letters in your GitHub username make it impossible to push to GHCR.
       # https://github.com/macbre/push-to-ghcr/issues/12
@@ -84,7 +69,7 @@ jobs:
           string: ${{ env.IMAGE_REGISTRY }}
 
       - name: Push To GHCR
-        uses: Wandalen/wretry.action@v3.5.0
+        uses: Wandalen/wretry.action@v3.8.0
         id: push
         if: github.event_name != 'pull_request'
         env:
@@ -101,15 +86,20 @@ jobs:
             username: ${{ env.REGISTRY_USER }}
             password: ${{ env.REGISTRY_PASSWORD }}
 
-      - name: Sign container image
-        uses: EyeCantCU/cosign-action/sign@v0.3.0
+      - name: Install Cosign
         if: github.event_name != 'pull_request'
-        with:
-          registry: ${{ env.IMAGE_REGISTRY }}
-          containers: ${{ steps.build_image.outputs.image }}
-          registry-token: ${{ github.token }}
-          signing-secret: ${{ secrets.SIGNING_SECRET }}
-          tags: ${{ steps.push.outputs.outputs && fromJSON(steps.push.outputs.outputs).digest }}
+        uses: sigstore/cosign-installer@v4.1.0
+
+      - name: Sign container image
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.push.outputs.digest }}
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          LOWERCASE: ${{ steps.registry_case.outputs.lowercase }}
+          IMAGE_NAME: ${{ steps.build_image.outputs.image }}
+        run: |
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${LOWERCASE}/${IMAGE_NAME}@${TAGS}
 
       - name: Echo outputs
         if: github.event_name != 'pull_request'
